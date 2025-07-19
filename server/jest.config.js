@@ -1,9 +1,12 @@
 export default {
   testEnvironment: 'node',
-  transform: {},
+  transform: {
+    "^.+\\.jsx?$": "babel-jest",
+  },
   collectCoverage: true,
   collectCoverageFrom: [
     "app/**/*.js",
+    "controllers/**/*.js",
     "!app/createApp.js"
   ],
   coverageThreshold: {
