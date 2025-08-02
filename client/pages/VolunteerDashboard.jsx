@@ -8,20 +8,6 @@ import { WelcomeBanner } from "../components/VolunteerDashboard/WelcomeBanner";
 import axios from "axios";
 
 export default function VolunteerDashboard() {
-  const nextEventData = {
-    name: "Sthiber",
-    nextEvent: {
-      eventName: "Community Food Drive",
-      date: "Aug 15, 2025",
-      time: "9:00 AM - 12:00 PM",
-      location: "Downtown Community Center",
-      category: "Food Distribution",
-      eventInfo:
-        "This is a more detailed view of the upcoming event. You can add more fields or interactive options here like RSVP, contact info, or notes.",
-      eventID: 1,
-    },
-  };
-
   const suggestedEvents = [
     {
       eventID: 1,
@@ -63,7 +49,8 @@ export default function VolunteerDashboard() {
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const [nextEvent, setNextEvent] = useState({});
+  const [nextEvent, setNextEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const getNextEvent = async () => {
     try {
@@ -71,9 +58,12 @@ export default function VolunteerDashboard() {
       const response = await axios.get(
         `${API_URL}/volunteer-dashboard/${userID}`
       );
-      setNextEvent(response.data.next_event[0]);
-      console.log(nextEvent);
-    } catch (error) {}
+      setNextEvent(response.data.next_event); // could be null
+    } catch (error) {
+      console.error("Error fetching next event:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -81,21 +71,24 @@ export default function VolunteerDashboard() {
   }, []);
 
   return (
-    <>
-      <div className="min-h-screen bg-gray-800 py-12 px-4 sm:px-6 lg:px-8 text-white">
-        <Navbar />
+    <div className="min-h-screen bg-gray-800 py-12 px-4 sm:px-6 lg:px-8 text-white">
+      <Navbar />
+
+      {!loading && nextEvent ? (
         <div className="container mx-auto px-4 py-6">
-          <WelcomeBanner name={nextEvent.full_name} />
+          <WelcomeBanner name={nextEvent?.full_name || "Volunteer"} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
             <div className="lg:col-span-2">
               <NextEventCard
-                eventName={nextEvent.event_name}
-                date={nextEvent.start_time}
-                time={nextEvent.end_time}
-                location={nextEvent.event_location}
-                category={nextEventData.nextEvent.category}
-                eventInfo={nextEvent.event_description}
-                event={nextEvent.event_id}
+                eventName={nextEvent?.event_name || "TBD"}
+                date={nextEvent?.start_time || "TBD"}
+                time={nextEvent?.end_time || "TBD"}
+                location={nextEvent?.event_location || "Unknown"}
+                category={nextEvent?.category || "General"}
+                eventInfo={
+                  nextEvent?.event_description || "No details available."
+                }
+                event={nextEvent?.event_id}
               />
               <SuggestedEvents suggestedEvents={suggestedEvents} />
               <CalendarView
@@ -106,7 +99,11 @@ export default function VolunteerDashboard() {
             <NotificationsPanel notifications={notifications} />
           </div>
         </div>
-      </div>
-    </>
+      ) : !loading ? (
+        <div className="text-center text-xl mt-10">
+          No upcoming events found.
+        </div>
+      ) : null}
+    </div>
   );
 }
