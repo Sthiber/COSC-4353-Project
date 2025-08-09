@@ -3,9 +3,6 @@ import db from "../db.js";
 
 const router = express.Router();
 
-// Temporary array to hold event data in-memory
-// let events = [];
-
 // Logging incoming requests:
 router.use((req, res, next) => {
   console.log(`Incoming ${req.method} request to ${req.url}`);

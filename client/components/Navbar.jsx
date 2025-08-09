@@ -119,15 +119,6 @@ export default function Navbar({ scrollToSection }) {
                 >
                   Event Management
                 </Link>
-
-                {/* 🔹 New Volunteer Matching link (desktop) */}
-                <Link
-                  to="/volunteer"
-                  className="text-gray-300 hover:text-blue-400 font-medium transition"
-                >
-                  Volunteer Matching
-                </Link>
-
                 {isAdmin && (
                   <>
                     <Link
@@ -212,16 +203,6 @@ export default function Navbar({ scrollToSection }) {
                   >
                     Event Management
                   </Link>
-
-                  {/* 🔹 New Volunteer Matching link (mobile) */}
-                  <Link
-                    to="/volunteer"
-                    className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Volunteer Matching
-                  </Link>
-
                   {isAdmin && (
                     <>
                       <Link

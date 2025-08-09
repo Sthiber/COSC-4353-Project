@@ -1,5 +1,5 @@
 /* AdminCalendar.jsx  –  unified calendar
-   • Add / Edit / Delete events  (EventForm with skill picker)
+   • Add / Edit / Delete events (EventForm with skill search + scrollable modal)
    • Volunteer requests with detailed modal
    Leo Nguyen
    ------------------------------------------------------------ */
@@ -160,7 +160,7 @@ export default function CalendarView({ allEvents = [], currentUserId, refreshEve
 }
 
 /* ====================================================================
-   Event add / edit form  (with skills picker)
+   Event add / edit form  (with skills search + scrollable content)
 ==================================================================== */
 function EventForm({ event=null, defaultDate, onClose, onSaved }) {
     const isEdit   = !!event;
@@ -181,11 +181,19 @@ function EventForm({ event=null, defaultDate, onClose, onSaved }) {
     );
     const [busy,setBusy]     = useState(false);
 
-    /* fetch all skill names once */
+    /* skills data + search */
     const [skillOpts,setSkillOpts] = useState([]);
+    const [skillQuery,setSkillQuery] = useState("");
+
     useEffect(()=>{
-        axios.get(`${API}/skills`).then(r=>setSkillOpts(r.data||[])).catch(()=>setSkillOpts([]));
+        axios.get(`${API}/skills`)
+            .then(r=>setSkillOpts(Array.isArray(r.data)?r.data:[]))
+            .catch(()=>setSkillOpts([]));
     },[]);
+
+    const filteredSkills = skillOpts.filter(s =>
+        s.toLowerCase().includes(skillQuery.toLowerCase())
+    );
 
     const toggleSkill = (s)=>
         setSkills(prev=>prev.includes(s)?prev.filter(x=>x!==s):[...prev,s]);
@@ -224,55 +232,77 @@ function EventForm({ event=null, defaultDate, onClose, onSaved }) {
 
     return (
         <Modal onClose={onClose}>
-            <h3 className="text-xl font-semibold mb-4">{isEdit?"Edit Event":"Add Event"}</h3>
-            <div>
-                <label className="block text-sm mb-1">Event Name</label>
-                <input
-                    value={name}
-                    maxLength={50}
-                    onChange={e=>setName(e.target.value)}
-                    className="bg-[#222b45] w-full rounded px-3 py-2"
-                />
-                <p className="text-xs text-gray-400 text-right">{name.length}/50 characters</p>
-            </div>
+            <div className="max-h-[85vh] overflow-y-auto pr-1"> {/* <-- scrollable */}
+                <h3 className="text-xl font-semibold mb-4">{isEdit?"Edit Event":"Add Event"}</h3>
 
-            <Textarea label="Event Description" value={desc} onChange={setDesc}/>
-            <Input label="Location" value={loc} onChange={setLoc}/>
-            <Select label="Urgency" value={urg} onChange={setUrg} options={["High","Medium","Low"]}/>
-
-            {/* skills */}
-            <div className="mb-4">
-                <label className="block text-sm mb-1">Skills &amp; Interests</label>
-                <div className="flex flex-wrap gap-2">
-                    {skillOpts.map(s=>(
-                        <button key={s}
-                                onClick={()=>toggleSkill(s)}
-                                className={`px-2 py-1 rounded-full text-xs ${
-                                    skills.includes(s)
-                                        ? "bg-emerald-600"
-                                        : "bg-gray-600 hover:bg-gray-500"
-                                }`}
-                        >{s}</button>
-                    ))}
+                <div>
+                    <label className="block text-sm mb-1">Event Name</label>
+                    <input
+                        value={name}
+                        maxLength={50}
+                        onChange={e=>setName(e.target.value)}
+                        className="bg-[#222b45] w-full rounded px-3 py-2"
+                    />
+                    <p className="text-xs text-gray-400 text-right">{name.length}/50 characters</p>
                 </div>
-            </div>
 
-            <Input label="Start" type="datetime-local" value={start} onChange={setStart}/>
-            <Input label="End"   type="datetime-local" value={end}   onChange={setEnd}/>
+                <Textarea label="Event Description" value={desc} onChange={setDesc}/>
+                <Input label="Location" value={loc} onChange={setLoc}/>
+                <Select label="Urgency" value={urg} onChange={setUrg} options={["High","Medium","Low"]}/>
 
-            <div className="flex justify-between mt-6">
-                {isEdit && (
-                    <button onClick={del} className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded">
-                        Delete
+                {/* skills + search */}
+                <div className="mb-4">
+                    <label className="block text-sm mb-1">Skills &amp; Interests</label>
+
+                    <input
+                        placeholder="Search skills…"
+                        value={skillQuery}
+                        onChange={(e)=>setSkillQuery(e.target.value)}
+                        className="w-full bg-[#222b45] rounded px-3 py-2 mb-2"
+                    />
+
+                    <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto rounded-lg p-2 bg-[#222b45]">
+                        {filteredSkills.length === 0 ? (
+                            <span className="text-xs text-gray-400">No skills match your search.</span>
+                        ) : (
+                            filteredSkills.map(s=>(
+                                <button key={s}
+                                        type="button"
+                                        onClick={()=>toggleSkill(s)}
+                                        className={`px-2 py-1 rounded-full text-xs whitespace-nowrap ${
+                                            skills.includes(s)
+                                                ? "bg-emerald-600"
+                                                : "bg-gray-600 hover:bg-gray-500"
+                                        }`}
+                                >{s}</button>
+                            ))
+                        )}
+                    </div>
+
+                    {skills.length > 0 && (
+                        <p className="text-xs text-gray-400 mt-2">
+                            Selected: {skills.join(", ")}
+                        </p>
+                    )}
+                </div>
+
+                <Input label="Start" type="datetime-local" value={start} onChange={setStart}/>
+                <Input label="End"   type="datetime-local" value={end}   onChange={setEnd}/>
+
+                <div className="flex justify-between mt-6">
+                    {isEdit && (
+                        <button onClick={del} className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded">
+                            Delete
+                        </button>
+                    )}
+                    <button
+                        onClick={save}
+                        disabled={busy}
+                        className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded disabled:opacity-40"
+                    >
+                        {busy ? "Saving…" : "Save"}
                     </button>
-                )}
-                <button
-                    onClick={save}
-                    disabled={busy}
-                    className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded disabled:opacity-40"
-                >
-                    {busy ? "Saving…" : "Save"}
-                </button>
+                </div>
             </div>
         </Modal>
     );
@@ -287,61 +317,63 @@ function VolunteerModal({ event,candidates,picked,setPicked,loading,onSend,onEdi
 
     return (
         <Modal onClose={onClose}>
-            {/* header details */}
-            <div className="flex justify-between items-start mb-2">
-                <h3 className="text-xl font-semibold text-indigo-400">{event.event_name}</h3>
-                <span className={`px-2 py-0.5 rounded text-xs ${
-                    event.urgency==="High"   ? "bg-red-600"   :
-                        event.urgency==="Medium" ? "bg-amber-600" : "bg-emerald-600"
-                }`}>{event.urgency}</span>
-            </div>
-            <p className="text-sm">
-                <strong>Date:</strong>{" "}
-                {new Date(event.start_time).toLocaleString()}
-                {event.end_time && " – "+new Date(event.end_time).toLocaleString()}
-            </p>
-            {event.event_location && (
-                <p className="text-sm"><strong>Location:</strong> {event.event_location}</p>
-            )}
-            {reqSkills.length>0 && (
-                <p className="text-sm"><strong>Skills:</strong> {reqSkills.join(", ")}</p>
-            )}
-            {event.event_description && (
-                <p className="text-sm mt-1 whitespace-pre-wrap">{event.event_description}</p>
-            )}
-
-            <h4 className="font-medium mt-4 mb-1">Volunteers</h4>
-            {loading && <p className="text-xs text-gray-400">Loading…</p>}
-            {!loading && candidates.length===0 && (
-                <p className="text-xs text-gray-400 mb-2">No volunteers match this event.</p>
-            )}
-
-            <AccordionPicker
-                multi
-                candidates={candidates}
-                requiredSkills={reqSkills}
-                onChangeSelection={setPicked}
-            />
-
-            <div className="flex justify-between mt-5">
-                <button onClick={onEdit}
-                        className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded">
-                    Edit Event
-                </button>
-
-                {candidates.length>0 && (
-                    <button
-                        onClick={onSend}
-                        disabled={!picked.length||loading}
-                        className={`px-4 py-2 ml-auto rounded ${
-                            picked.length
-                                ? "bg-violet-600 hover:bg-violet-500"
-                                : "bg-gray-600 cursor-not-allowed"
-                        }`}
-                    >
-                        {loading?"Sending…":`Send Request${picked.length>1?"s":""}`}
-                    </button>
+            <div className="max-h-[85vh] overflow-y-auto pr-1"> {/* safety scroll */}
+                {/* header details */}
+                <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-semibold text-indigo-400">{event.event_name}</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs ${
+                        event.urgency==="High"   ? "bg-red-600"   :
+                            event.urgency==="Medium" ? "bg-amber-600" : "bg-emerald-600"
+                    }`}>{event.urgency}</span>
+                </div>
+                <p className="text-sm">
+                    <strong>Date:</strong>{" "}
+                    {new Date(event.start_time).toLocaleString()}
+                    {event.end_time && " – "+new Date(event.end_time).toLocaleString()}
+                </p>
+                {event.event_location && (
+                    <p className="text-sm"><strong>Location:</strong> {event.event_location}</p>
                 )}
+                {reqSkills.length>0 && (
+                    <p className="text-sm"><strong>Skills:</strong> {reqSkills.join(", ")}</p>
+                )}
+                {event.event_description && (
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{event.event_description}</p>
+                )}
+
+                <h4 className="font-medium mt-4 mb-1">Volunteers</h4>
+                {loading && <p className="text-xs text-gray-400">Loading…</p>}
+                {!loading && candidates.length===0 && (
+                    <p className="text-xs text-gray-400 mb-2">No volunteers match this event.</p>
+                )}
+
+                <AccordionPicker
+                    multi
+                    candidates={candidates}
+                    requiredSkills={reqSkills}
+                    onChangeSelection={setPicked}
+                />
+
+                <div className="flex justify-between mt-5">
+                    <button onClick={onEdit}
+                            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded">
+                        Edit Event
+                    </button>
+
+                    {candidates.length>0 && (
+                        <button
+                            onClick={onSend}
+                            disabled={!picked.length||loading}
+                            className={`px-4 py-2 ml-auto rounded ${
+                                picked.length
+                                    ? "bg-violet-600 hover:bg-violet-500"
+                                    : "bg-gray-600 cursor-not-allowed"
+                            }`}
+                        >
+                            {loading?"Sending…":`Send Request${picked.length>1?"s":""}`}
+                        </button>
+                    )}
+                </div>
             </div>
         </Modal>
     );
@@ -353,7 +385,8 @@ function VolunteerModal({ event,candidates,picked,setPicked,loading,onSend,onEdi
 function Modal({ children,onClose }) {
     return (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50">
-            <div className="bg-[#1a2035] text-white rounded-xl p-6 w-[90%] max-w-md relative shadow-lg">
+            {/* inner is scrollable; keeps header/close visible enough */}
+            <div className="bg-[#1a2035] text-white rounded-xl p-6 w-[92%] max-w-md relative shadow-lg">
                 <button onClick={onClose}
                         className="absolute top-3 right-3 text-gray-400 hover:text-red-400 text-xl">&times;</button>
                 {children}
@@ -363,7 +396,7 @@ function Modal({ children,onClose }) {
 }
 function Input({ label,type="text",value,onChange }) {
     return (
-        <div>
+        <div className="mb-4">
             <label className="block text-sm mb-1">{label}</label>
             <input type={type} value={value}
                    onChange={e=>onChange(e.target.value)}
@@ -373,7 +406,7 @@ function Input({ label,type="text",value,onChange }) {
 }
 function Textarea({label,value,onChange}) {
     return (
-        <div>
+        <div className="mb-4">
             <label className="block text-sm mb-1">{label}</label>
             <textarea rows={3} value={value}
                       onChange={e=>onChange(e.target.value)}
@@ -383,7 +416,7 @@ function Textarea({label,value,onChange}) {
 }
 function Select({label,value,onChange,options}) {
     return (
-        <div>
+        <div className="mb-4">
             <label className="block text-sm mb-1">{label}</label>
             <select value={value} onChange={e=>onChange(e.target.value)}
                     className="bg-[#222b45] rounded px-3 py-2 w-full">
