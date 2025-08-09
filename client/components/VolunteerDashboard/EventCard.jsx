@@ -28,6 +28,7 @@ export function EventCard({ event, onClick }) {
 
   return (
     <div
+      id={`event-card-${event.event_id}`}  // 👈 anchor so we can scroll to it
       className="bg-gray-900 rounded-lg p-6 border border-gray-700 hover:border-indigo-600 transition-colors cursor-pointer flex flex-col h-full"
       onClick={() => onClick(event)}
     >

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Calendar, MapPin, Clock } from "lucide-react";
+import { Search, Filter, Calendar, MapPin } from "lucide-react";
 import { EventCard } from "./EventCard";
 import { EventDetailView } from "./EventDetailView";
 import { toast } from "react-toastify";
@@ -13,17 +13,33 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [locationTerm, setLocationTerm] = useState("");
   const [selectedUrgency, setSelectedUrgency] = useState("all");
-
-  const [selectedDateFilter, setSelectedDateFilter] = useState("any"); // 'any', 'upcoming', 'today', 'this_week'
+  const [selectedDateFilter, setSelectedDateFilter] = useState("any");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 9;
 
-  // Update allEvents when initialAllEvents prop changes (e.g., from parent refresh)
+  // keep in sync with parent
   useEffect(() => {
     setAllEvents(initialAllEvents);
   }, [initialAllEvents]);
 
-  const handleEnroll = async (eventId, eventName) => {
+  // 🔥 auto-open detail for a specific event id (set by /volunteer page)
+  useEffect(() => {
+    const target = localStorage.getItem("vd_open_detail_event");
+    if (!target || !allEvents?.length) return;
+
+    const hit = allEvents.find((e) => String(e.event_id) === String(target));
+    if (hit) {
+      setSelectedEvent(hit);
+      setShowDetail(true);
+      setTimeout(() => {
+        const el = document.getElementById(`event-card-${hit.event_id}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    }
+    localStorage.removeItem("vd_open_detail_event");
+  }, [allEvents]);
+
+  const handleEnroll = async (eventId) => {
     try {
       setEnrolling(eventId);
       const userID = localStorage.getItem("userId");
@@ -51,9 +67,8 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   };
 
   const filterEvents = () => {
-    let filtered = allEvents;
+    let filtered = allEvents || [];
 
-    // Filter by search term (event name or skills)
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
       filtered = filtered.filter((event) => {
@@ -71,14 +86,12 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
       );
     }
 
-    // Filter by urgency
     if (selectedUrgency !== "all") {
       filtered = filtered.filter(
         (event) => (event.urgency || "").toLowerCase() === selectedUrgency
       );
     }
 
-    // Filter by date
     const now = new Date();
     switch (selectedDateFilter) {
       case "upcoming":
@@ -86,28 +99,23 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
         break;
       case "today":
         filtered = filtered.filter((event) => {
-          const eventDate = new Date(event.start_time);
-          return eventDate.toDateString() === now.toDateString();
+          const d = new Date(event.start_time);
+          return d.toDateString() === now.toDateString();
         });
         break;
       case "this_week":
-        const startOfWeek = new Date(
+        const start = new Date(
           now.getFullYear(),
           now.getMonth(),
           now.getDate() - now.getDay()
         );
-        const endOfWeek = new Date(
-          startOfWeek.getFullYear(),
-          startOfWeek.getMonth(),
-          startOfWeek.getDate() + 7
-        );
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
         filtered = filtered.filter((event) => {
-          const eventDate = new Date(event.start_time);
-          return eventDate >= startOfWeek && eventDate < endOfWeek;
+          const d = new Date(event.start_time);
+          return d >= start && d < end;
         });
         break;
       default:
-        // 'any' - no date filtering
         break;
     }
 
@@ -117,13 +125,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   useEffect(() => {
     filterEvents();
     setPage(1);
-  }, [
-    searchTerm,
-    locationTerm,
-    selectedUrgency,
-    selectedDateFilter,
-    allEvents,
-  ]);
+  }, [searchTerm, locationTerm, selectedUrgency, selectedDateFilter, allEvents]);
 
   const urgencies = [
     ...new Set((allEvents || []).map((e) => e.urgency).filter(Boolean)),
@@ -139,15 +141,9 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
     setShowDetail(false);
   };
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil((filteredEvents?.length || 0) / PAGE_SIZE)
-  );
+  const totalPages = Math.max(1, Math.ceil((filteredEvents?.length || 0) / PAGE_SIZE));
   const startIndex = (page - 1) * PAGE_SIZE;
-  const pageItems = (filteredEvents || []).slice(
-    startIndex,
-    startIndex + PAGE_SIZE
-  );
+  const pageItems = (filteredEvents || []).slice(startIndex, startIndex + PAGE_SIZE);
   const showingFrom = filteredEvents.length ? startIndex + 1 : 0;
   const showingTo = Math.min(startIndex + PAGE_SIZE, filteredEvents.length);
 
@@ -163,17 +159,14 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
     <div className="space-y-6">
       {!showDetail && (
         <>
-          {/* Main Search Bar */}
+          {/* Search / Filters */}
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
             <div className="flex flex-col md:flex-row items-center gap-4">
               <div className="flex-1 w-full relative">
                 <label htmlFor="search-events" className="sr-only">
                   Find Events (Name, Skill)
                 </label>
-                <Search
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   id="search-events"
@@ -183,16 +176,12 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
                   className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
-              <div className="md:w-px h-10 bg-gray-700 hidden md:block" />{" "}
-              {/* Vertical Divider */}
+              <div className="md:w-px h-10 bg-gray-700 hidden md:block" />
               <div className="flex-1 w-full relative">
                 <label htmlFor="search-location" className="sr-only">
                   Location
                 </label>
-                <MapPin
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   id="search-location"
@@ -212,19 +201,16 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
             </div>
           </div>
 
+          {/* Header + Filters */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-white">Browse All Events</h2>
             <div className="flex items-center space-x-4">
               <span className="text-gray-300 text-lg font-medium">
-                Showing {showingFrom} to {showingTo} of {filteredEvents.length}{" "}
-                Events
+                Showing {showingFrom} to {showingTo} of {filteredEvents.length} Events
               </span>
 
               <div className="relative">
-                <Filter
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
-                  size={16}
-                />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                 <select
                   value={selectedUrgency}
                   onChange={(e) => setSelectedUrgency(e.target.value)}
@@ -233,7 +219,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
                 >
                   <option value="all">All Urgency</option>
                   {urgencies.map((u) => (
-                    <option key={u} value={u.toLowerCase()}>
+                    <option key={u} value={String(u).toLowerCase()}>
                       {u}
                     </option>
                   ))}
@@ -241,10 +227,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
               </div>
 
               <div className="relative">
-                <Calendar
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
-                  size={16}
-                />
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                 <select
                   value={selectedDateFilter}
                   onChange={(e) => setSelectedDateFilter(e.target.value)}
@@ -260,16 +243,16 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
             </div>
           </div>
 
+          {/* Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {pageItems.map((event) => (
-              <EventCard
-                key={event.event_id}
-                event={event}
-                onClick={handleCardClick}
-              />
+              <div id={`event-card-${event.event_id}`} key={event.event_id}>
+                <EventCard event={event} onClick={handleCardClick} />
+              </div>
             ))}
           </div>
-          {/* Pagination controls */}
+
+          {/* Pagination */}
           {filteredEvents.length > 0 && (
             <div className="flex items-center justify-center gap-3 mt-2">
               <button
@@ -297,12 +280,8 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
           {filteredEvents.length === 0 && (
             <div className="text-center py-12">
               <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
-                No Events Found
-              </h3>
-              <p className="text-gray-400">
-                Try adjusting your search or filter criteria.
-              </p>
+              <h3 className="text-lg font-medium text-white mb-2">No Events Found</h3>
+              <p className="text-gray-400">Try adjusting your search or filter criteria.</p>
             </div>
           )}
         </>

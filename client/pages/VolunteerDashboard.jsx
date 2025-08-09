@@ -10,8 +10,8 @@ import { User, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { DashboardNavigation } from "../components/VolunteerDashboard/DashboardNavigation";
 import { MyEvents } from "../components/VolunteerDashboard/MyEvents";
-import { VolunteerHistory } from "../components/VolunteerDashboard/History";
 import { BrowseEvents } from "../components/VolunteerDashboard/BrowseEvents";
+
 /* ──────────────────────────────────────────────────────────────
    BASE URLs
 ────────────────────────────────────────────────────────────── */
@@ -24,25 +24,12 @@ export default function VolunteerDashboard() {
   const [nextEvent, setNextEvent] = useState({});
   const [suggestedEvents, setSuggested] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  // const [upcomingEvents, setUpcoming] = useState([]);
-  // const [allEvents, setAllEvents] = useState([]);
   const [calendarInfo, setCalendarInfo] = useState([]);
   const [activeSection, setActiveSection] = useState("overview");
   const [enrolledEvents, setEnrolledEvents] = useState([]);
   const [browseEvents, setBrowseEvents] = useState([]);
 
   /* ───────── helpers ───────── */
-  // const fetchEvents = async () => {
-  //   // Leo Nguyen - /events must hit HARD_API
-  //   const { data } = await axios.get(`${HARD_API}/events`);
-  //   const events = (data?.events || []).map((e) => ({
-  //     date: new Date(e.start_time),
-  //     title: e.event_name,
-  //     details: e,
-  //   }));
-  //   setAllEvents(events);
-  //   setUpcoming(events.filter((e) => e.date >= new Date()));
-  // };
 
   const fetchCalendarEvents = async (userID) => {
     try {
@@ -133,7 +120,6 @@ export default function VolunteerDashboard() {
     try {
       setLoading(true);
       await Promise.all([
-        // fetchEvents(),
         fetchCalendarEvents(userID),
         fetchNextEvent(userID),
         fetchSuggestedEvents(userID),
@@ -151,6 +137,25 @@ export default function VolunteerDashboard() {
   useEffect(() => {
     if (userID) loadData();
   }, []);
+
+  /* ───────── NEW: jump from Matching → Browse tab + scroll to event ───────── */
+  useEffect(() => {
+    const jump = localStorage.getItem("vd_jump_all_events");
+    const targetId = localStorage.getItem("vd_scroll_to_event");
+    if (jump) {
+      // switch the tab
+      setActiveSection("all-events");
+      // wait for BrowseEvents list to render, then scroll
+      setTimeout(() => {
+        if (targetId) {
+          const el = document.getElementById(`event-card-${targetId}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        localStorage.removeItem("vd_jump_all_events");
+        localStorage.removeItem("vd_scroll_to_event");
+      }, 400);
+    }
+  }, [browseEvents]); // runs once the list is present
 
   /* ───────── render ───────── */
   return (
@@ -195,15 +200,15 @@ export default function VolunteerDashboard() {
                   <CalendarView calendarInfo={calendarInfo} />
                 </div>
                 <NotificationsPanel
-                    notifications={notifications}
-                    refresh={async () => {
-                      await Promise.all([
-                        fetchCombinedNotifications(userID), // notifications
-                        fetchEnrolledEvents(userID),        // My Events
-                        fetchCalendarEvents(userID),        // calendar
-                        fetchBrowseEvents(userID),          // optional: removes accepted item from Browse
-                      ]);
-                    }}
+                  notifications={notifications}
+                  refresh={async () => {
+                    await Promise.all([
+                      fetchCombinedNotifications(userID), // notifications
+                      fetchEnrolledEvents(userID), // My Events
+                      fetchCalendarEvents(userID), // calendar
+                      fetchBrowseEvents(userID), // optional: removes accepted item from Browse
+                    ]);
+                  }}
                 />
               </div>
             </>

@@ -21,8 +21,18 @@ export async function matchVolunteer(req, res) {
     let volunteer;
     if (USE_DB) {
       const [rows] = await db.query(
-        `SELECT p.user_id, p.city, p.state, p.zip_code, skill_name FROM profile AS p LEFT JOIN profile_skill AS ps ON p.user_id = ps.user_id LEFT JOIN skill AS s ON ps.skill_id = s.skill_id WHERE p.user_id = ?;`,
-        [volunteerId]
+          `SELECT
+             p.user_id,
+             p.city,
+             p.state,
+             p.zip_code,
+             GROUP_CONCAT(s.skill_name SEPARATOR ', ') AS skills
+           FROM profile p
+                  LEFT JOIN profile_skill ps ON p.user_id = ps.user_id
+                  LEFT JOIN skill s ON ps.skill_id = s.skill_id
+           WHERE p.user_id = ?
+           GROUP BY p.user_id, p.city, p.state, p.zip_code`,
+          [volunteerId]
       );
       if (!rows.length) {
         return res.status(404).json({ message: "Volunteer not found" });
@@ -51,24 +61,43 @@ export async function matchVolunteer(req, res) {
       //     return res.status(404).json({ message: "Volunteer not found" });
       //   }
 
+      const csvSkills = rows[0].skills;
       volunteer = {
         id: rows[0].user_id,
         location: `${rows[0].city}, ${rows[0].state}, ${rows[0].zip_code}`,
-        skills: rows
-          .map((row) => row.skill_name)
-          .filter((name) => name !== null)
-          .map((s) => s.trim()),
+        skills: (csvSkills || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
         // Availability will be handled later
       };
     }
 
     // SG: This query retrieves all the events found in the db. This will be used to score later on
     const [events] = await db.query(
-      "SELECT em.event_id, em.event_name, em.event_location, em.event_description,s.skill_name, em.start_time, em.end_time FROM eventManage AS em LEFT JOIN event_skill AS es ON em.event_id = es.event_id LEFT JOIN skill AS s ON es.skill_id = s.skill_id WHERE em.start_time > NOW() AND em.event_id NOT IN (SELECT event_id FROM volunteer_history WHERE volunteer_id = ? AND event_status = 'Upcoming');",
-      [volunteerId]
+        `SELECT
+           em.event_id,
+           em.event_name,
+           em.event_location,
+           em.event_description,
+           em.start_time,
+           em.end_time,
+           GROUP_CONCAT(s.skill_name SEPARATOR ', ') AS required_skills
+         FROM eventManage em
+                LEFT JOIN event_skill es ON em.event_id = es.event_id
+                LEFT JOIN skill s ON es.skill_id = s.skill_id
+         WHERE em.start_time > NOW()
+           AND em.event_id NOT IN (
+           SELECT event_id
+           FROM volunteer_history
+           WHERE volunteer_id = ? AND event_status = 'Upcoming'
+         )
+         GROUP BY em.event_id, em.event_name, em.event_location,
+                  em.event_description, em.start_time, em.end_time
+         ORDER BY em.start_time ASC`,
+        [volunteerId]
     );
-
-    /* Sample Return of the query above: 
+    /* Sample Return of the query above:
     12,Bobos Party,123 Houston St.,Communication,2025-08-07 03:58:05,2025-08-01 03:58:07
     12,Bobos Party,123 Houston St.,Teamwork,2025-08-07 03:58:05,2025-08-01 03:58:07
     12,Bobos Party,123 Houston St.,Event Planning,2025-08-07 03:58:05,2025-08-01 03:58:07
@@ -93,8 +122,11 @@ export async function matchVolunteer(req, res) {
         });
       }
 
-      if (row.skill_name) {
-        eventMap.get(row.event_id).requiredSkills.push(row.skill_name);
+      if (row.required_skills) {
+        eventMap.get(row.event_id).requiredSkills = row.required_skills
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
       }
     });
 
@@ -134,27 +166,27 @@ export async function matchVolunteer(req, res) {
     //   .sort((a, b) => b.matchScore - a.matchScore);
 
     const matchedEvents = parsedEvents
-      .map((ev) => {
-        const locationMatch = ev.location === volunteer.location;
+        .map((ev) => {
+          const locationMatch = ev.location === volunteer.location;
 
-        const matchedSkills = ev.requiredSkills.filter((skill) =>
-          (volunteer.skills || []).includes(skill)
-        );
-        const skillScore = matchedSkills.length;
+          const matchedSkills = ev.requiredSkills.filter((skill) =>
+              (volunteer.skills || []).includes(skill)
+          );
+          const skillScore = matchedSkills.length;
 
-        // I will add this on later
-        // const availabilityMatch =
-        //   new Date(ev.endTime) >= new Date(volunteer.availability.start) &&
-        //   new Date(ev.startTime) <= new Date(volunteer.availability.end);
+          // I will add this on later
+          // const availabilityMatch =
+          //   new Date(ev.endTime) >= new Date(volunteer.availability.start) &&
+          //   new Date(ev.startTime) <= new Date(volunteer.availability.end);
 
-        // (availabilityMatch ? 2 : 0) + Add this on later
-        const matchScore = (locationMatch ? 2 : 0) + skillScore * 2;
+          // (availabilityMatch ? 2 : 0) + Add this on later
+          const matchScore = (locationMatch ? 2 : 0) + skillScore * 2;
 
-        return { ...ev, matchScore, matchedSkills };
-      })
-      .filter((ev) => ev.matchScore >= 2)
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 5);
+          return { ...ev, matchScore, matchedSkills };
+        })
+        .filter((ev) => ev.matchScore >= 2)
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .slice(0, 5);
 
     // SG: I commented this stuff out because its mock data and we need to pull from the actual db.
 

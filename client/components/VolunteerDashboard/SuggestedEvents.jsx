@@ -1,14 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import {
-  ChevronRight,
-  ChevronLeft,
-  X,
-  Calendar,
-  Clock,
-  MapPin,
-  Briefcase,
-} from "lucide-react";
+import { ChevronRight, ChevronLeft, X, Calendar, Clock, MapPin, Briefcase } from "lucide-react";
 
 export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -17,11 +9,7 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
   const API_URL = import.meta.env.VITE_API_URL;
 
   const itemsPerPage = 3;
-
-  const paginatedEvents = suggestedEvents.slice(
-    page * itemsPerPage,
-    page * itemsPerPage + itemsPerPage
-  );
+  const paginatedEvents = suggestedEvents.slice(page * itemsPerPage, page * itemsPerPage + itemsPerPage);
 
   const openPopup = (event) => {
     setSelectedEvent(event);
@@ -36,10 +24,7 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
   const postInterest = async (eventID) => {
     try {
       const volunteerID = localStorage.getItem("userId");
-      await axios.post(`${API_URL}/volunteer-dashboard/interest/${eventID}`, {
-        userID: volunteerID,
-      });
-      console.log("Interest recorded!");
+      await axios.post(`${API_URL}/volunteer-dashboard/interest/${eventID}`, { userID: volunteerID });
       await onRefresh();
       closePopup();
     } catch (error) {
@@ -50,12 +35,8 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
   if (suggestedEvents.length === 0) {
     return (
       <div className="bg-[#222b45] rounded-xl p-6 mb-6 text-center">
-        <h2 className="text-xl font-semibold text-white mb-2">
-          No Suggested Events
-        </h2>
-        <p className="text-gray-400 mb-4">
-          We couldn't find any event matches for you at this time.
-        </p>
+        <h2 className="text-xl font-semibold text-white mb-2">No Suggested Events</h2>
+        <p className="text-gray-400 mb-4">We couldn't find any event matches for you at this time.</p>
         <button
           onClick={() => setActiveS("all-events")}
           className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg transition-colors duration-200"
@@ -82,9 +63,7 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
             className="p-1 rounded-full bg-[#1a2035] hover:bg-indigo-700 disabled:opacity-30"
             onClick={() =>
               setPage((prev) =>
-                (prev + 1) * itemsPerPage < suggestedEvents.length
-                  ? prev + 1
-                  : prev
+                (prev + 1) * itemsPerPage < suggestedEvents.length ? prev + 1 : prev
               )
             }
             disabled={(page + 1) * itemsPerPage >= suggestedEvents.length}
@@ -98,6 +77,7 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
         {paginatedEvents.map((event) => (
           <div
             key={event.id}
+            data-event-title={event.title || ""}
             className="bg-[#1a2035] rounded-lg p-4 min-w-[250px]"
           >
             <div className="flex justify-between items-start mb-3">
@@ -121,44 +101,28 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
         ))}
       </div>
 
-      {/* <div className="mt-4 text-center text-sm text-gray-400">
-        Page {page + 1} of {Math.ceil(suggestedEvents.length / itemsPerPage)}
-      </div> */}
-
       {showPopup && selectedEvent && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50">
           <div className="bg-[#1a2035] text-white rounded-xl p-6 w-[90%] max-w-md relative shadow-lg">
-            <button
-              onClick={closePopup}
-              className="absolute top-3 right-3 text-gray-400 hover:text-red-400"
-            >
+            <button onClick={closePopup} className="absolute top-3 right-3 text-gray-400 hover:text-red-400">
               <X size={20} />
             </button>
 
-            <h3 className="text-2xl font-semibold text-indigo-400 mb-4">
-              {selectedEvent.title}
-            </h3>
+            <h3 className="text-2xl font-semibold text-indigo-400 mb-4">{selectedEvent.title}</h3>
 
             <div className="space-y-3 text-sm">
               <div className="flex items-center">
                 <Calendar className="mr-3 text-indigo-400" size={18} />
-                <span>
-                  {new Date(selectedEvent.startTime).toLocaleDateString(
-                    "en-US"
-                  )}
-                </span>
+                <span>{new Date(selectedEvent.startTime).toLocaleDateString("en-US")}</span>
               </div>
               <div className="flex items-center">
                 <Clock className="mr-3 text-indigo-400" size={18} />
                 <span>
-                  {new Date(selectedEvent.startTime).toLocaleTimeString(
-                    "en-US",
-                    {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: true,
-                    }
-                  )}{" "}
+                  {new Date(selectedEvent.startTime).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}{" "}
                   -{" "}
                   {new Date(selectedEvent.endTime).toLocaleTimeString("en-US", {
                     hour: "2-digit",
@@ -177,9 +141,7 @@ export const SuggestedEvents = ({ suggestedEvents, onRefresh, setActiveS }) => {
               </div>
             </div>
 
-            <div className="mt-6 text-sm text-gray-300">
-              {selectedEvent.description}
-            </div>
+            <div className="mt-6 text-sm text-gray-300">{selectedEvent.description}</div>
 
             <button
               onClick={() => {

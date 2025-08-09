@@ -7,6 +7,7 @@ import HomePage from "../pages/HomePage.jsx";
 import CompleteProfile from "../pages/CompleteProfile.jsx";
 import LoginPage from "../pages/LoginPage.jsx";
 import RegisterPage from "../pages/RegisterPage.jsx";
+import NotificationsPage from "../pages/NotificationsPage.jsx";
 import VolunteerMatchingForm from "../pages/VolunteerMatchingForm.jsx";
 import EventManagement from "../pages/EventManagement.jsx";
 import AdminPage from "../pages/AdminPage.jsx";
@@ -59,6 +60,14 @@ export default function App() {
                         element={
                             <RequireAuth>
                                 <VolunteerHistoryPage />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/notifications"
+                        element={
+                            <RequireAuth>
+                                <NotificationsPage />
                             </RequireAuth>
                         }
                     />
