@@ -74,7 +74,7 @@ export default function App() {
                     <Route
                         path="/event-management"
                         element={
-                            <RequireAuth role="admin">
+                            <RequireAuth>
                                 <EventManagement />
                             </RequireAuth>
                         }

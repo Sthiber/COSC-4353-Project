@@ -243,6 +243,7 @@ export default function EventManagement(){
 
       // Saving Event flag & name locally
       localStorage.setItem("eventComplete", "true");
+      alert("Event Saved!");
       setHasUnsavedChanges(false);
       navigate("/");
     } catch (err) {

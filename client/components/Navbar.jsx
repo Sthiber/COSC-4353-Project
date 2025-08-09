@@ -1,4 +1,4 @@
-// ... your existing imports remain the same
+// client/components/Navbar.jsx
 import { useState, useEffect } from "react";
 import { Menu, X, Users } from "lucide-react";
 import { Button } from "./ui/Button";
@@ -23,9 +23,7 @@ export default function Navbar({ scrollToSection }) {
   }, []);
 
   const handleScroll = (section) => {
-    if (scrollToSection) {
-      scrollToSection(section);
-    }
+    if (scrollToSection) scrollToSection(section);
     setIsMenuOpen(false);
   };
 
@@ -54,11 +52,14 @@ export default function Navbar({ scrollToSection }) {
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <Users className="w-6 h-6 text-white" />
             </div>
-            <span className="ml-3 text-xl font-semibold text-white">Volentra</span>
+            <span className="ml-3 text-xl font-semibold text-white">
+              Volentra
+            </span>
           </Link>
 
+          {/* Desktop nav */}
           <div className="hidden md:flex items-center space-x-8">
-            {!loggedIn && (
+            {!loggedIn ? (
               <>
                 <Link
                   to="/"
@@ -95,18 +96,15 @@ export default function Navbar({ scrollToSection }) {
                   </Button>
                 </Link>
               </>
-            )}
-
-            {loggedIn && (
+            ) : (
               <>
-                {!isAdmin && (
-                  <Link
-                    to="/volunteer-dashboard"
-                    className="text-gray-300 hover:text-blue-400 font-medium transition"
-                  >
-                    Dashboard
-                  </Link>
-                )}
+                {/* visible to all logged-in users */}
+                <Link
+                  to="/volunteer-dashboard"
+                  className="text-gray-300 hover:text-blue-400 font-medium transition"
+                >
+                  Dashboard
+                </Link>
                 <Link
                   to="/complete-profile"
                   className="text-gray-300 hover:text-blue-400 font-medium transition"
@@ -119,13 +117,21 @@ export default function Navbar({ scrollToSection }) {
                 >
                   Event Management
                 </Link>
+                <Link
+                  to="/volunteer"
+                  className="text-gray-300 hover:text-blue-400 font-medium transition"
+                >
+                  Volunteer Matching
+                </Link>
+
+                {/* admin-only */}
                 {isAdmin && (
                   <>
                     <Link
                       to="/admin"
                       className="text-gray-300 hover:text-blue-400 font-medium transition"
                     >
-                      Dashboard
+                      Admin
                     </Link>
                     <Link
                       to="/manage-users"
@@ -133,29 +139,42 @@ export default function Navbar({ scrollToSection }) {
                     >
                       Manage Users
                     </Link>
+                    <Link
+                      to="/admin/event-report"
+                      className="text-gray-300 hover:text-blue-400 font-medium transition"
+                    >
+                      Reports
+                    </Link>
                   </>
                 )}
-                <Button onClick={handleLogout} className="text-gray-300 hover:text-red-400 transition">
+
+                <Button
+                  onClick={handleLogout}
+                  className="text-gray-300 hover:text-red-400 transition"
+                >
                   Logout
                 </Button>
               </>
             )}
           </div>
 
+          {/* Mobile burger */}
           <div className="md:hidden">
             <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              onClick={() => setIsMenuOpen((v) => !v)}
               className="text-gray-300 hover:text-blue-400 transition"
+              aria-label="Toggle menu"
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
 
+        {/* Mobile drawer */}
         {isMenuOpen && (
           <div className="md:hidden border-t border-gray-800 bg-gray-900">
             <div className="px-2 pt-2 pb-3 space-y-1">
-              {!loggedIn && location.pathname === "/" && (
+              {!loggedIn ? (
                 <>
                   <button
                     onClick={() => handleScroll("hero")}
@@ -170,25 +189,25 @@ export default function Navbar({ scrollToSection }) {
                     About
                   </button>
                   <Link to="/login">
-                    <Button className="w-full text-blue-400 hover:bg-blue-500/10">Login</Button>
+                    <Button className="w-full text-blue-400 hover:bg-blue-500/10">
+                      Login
+                    </Button>
                   </Link>
                   <Link to="/register">
-                    <Button className="w-full text-blue-400 hover:bg-blue-500/10">Register</Button>
+                    <Button className="w-full text-blue-400 hover:bg-blue-500/10">
+                      Register
+                    </Button>
                   </Link>
                 </>
-              )}
-
-              {loggedIn && (
+              ) : (
                 <>
-                  {!isAdmin && (
-                    <Link
-                      to="/volunteer-dashboard"
-                      className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Dashboard
-                    </Link>
-                  )}
+                  <Link
+                    to="/volunteer-dashboard"
+                    className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
                   <Link
                     to="/complete-profile"
                     className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
@@ -203,6 +222,15 @@ export default function Navbar({ scrollToSection }) {
                   >
                     Event Management
                   </Link>
+                  <Link
+                    to="/volunteer"
+                    className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Volunteer Matching
+                  </Link>
+
+                  {/* admin-only */}
                   {isAdmin && (
                     <>
                       <Link
@@ -210,7 +238,7 @@ export default function Navbar({ scrollToSection }) {
                         className="block px-3 py-2 text-gray-300 hover:text-blue-400 hover:bg-gray-800 rounded-md"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Dashboard
+                        Admin
                       </Link>
                       <Link
                         to="/manage-users"
@@ -228,10 +256,11 @@ export default function Navbar({ scrollToSection }) {
                       </Link>
                     </>
                   )}
+
                   <div className="text-center">
                     <button
                       onClick={handleLogout}
-                      className="text-red-400 hover:text-red-400 hover:bg-gray-800 px-3 py-2 rounded-md"
+                      className="text-red-400 hover:text-red-400 hover:bg-gray-800 px-3 py-2 rounded-md w-full"
                     >
                       Logout
                     </button>
