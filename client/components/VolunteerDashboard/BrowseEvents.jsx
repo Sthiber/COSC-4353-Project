@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Calendar, MapPin } from "lucide-react";
+import { Search, Filter, Calendar, MapPin, Clock } from "lucide-react";
 import { EventCard } from "./EventCard";
 import { EventDetailView } from "./EventDetailView";
 import { toast } from "react-toastify";
 
-export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
+export function BrowseEvents({ allEvents: initialAllEvents, onEnroll, preselectEventId }) {
   const [allEvents, setAllEvents] = useState(initialAllEvents);
   const [filteredEvents, setFilteredEvents] = useState(initialAllEvents);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -13,31 +13,28 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [locationTerm, setLocationTerm] = useState("");
   const [selectedUrgency, setSelectedUrgency] = useState("all");
-  const [selectedDateFilter, setSelectedDateFilter] = useState("any");
+
+  const [selectedDateFilter, setSelectedDateFilter] = useState("any"); // 'any', 'upcoming', 'today', 'this_week'
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 9;
 
-  // keep in sync with parent
+  // keep local with latest
   useEffect(() => {
     setAllEvents(initialAllEvents);
+    setFilteredEvents(initialAllEvents);
   }, [initialAllEvents]);
 
-  // 🔥 auto-open detail for a specific event id (set by /volunteer page)
+  // If coming from Volunteer Matching, auto-open the selected event
   useEffect(() => {
-    const target = localStorage.getItem("vd_open_detail_event");
-    if (!target || !allEvents?.length) return;
-
-    const hit = allEvents.find((e) => String(e.event_id) === String(target));
-    if (hit) {
-      setSelectedEvent(hit);
+    if (!preselectEventId || !Array.isArray(initialAllEvents) || !initialAllEvents.length) return;
+    const target = initialAllEvents.find(
+      (e) => String(e.event_id) === String(preselectEventId)
+    );
+    if (target) {
+      setSelectedEvent(target);
       setShowDetail(true);
-      setTimeout(() => {
-        const el = document.getElementById(`event-card-${hit.event_id}`);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 0);
     }
-    localStorage.removeItem("vd_open_detail_event");
-  }, [allEvents]);
+  }, [preselectEventId, initialAllEvents]);
 
   const handleEnroll = async (eventId) => {
     try {
@@ -69,11 +66,13 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   const filterEvents = () => {
     let filtered = allEvents || [];
 
+    // Filter by search term (event name, skills, location)
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
       filtered = filtered.filter((event) => {
         const name = event.event_name?.toLowerCase() || "";
-        const skills = (event.skills || []).join(", ").toLowerCase();
+        const skills = (Array.isArray(event.skills) ? event.skills.join(", ") : event.skills || "")
+          .toLowerCase();
         const loc = event.event_location?.toLowerCase() || "";
         return name.includes(t) || skills.includes(t) || loc.includes(t);
       });
@@ -86,12 +85,14 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
       );
     }
 
+    // Filter by urgency
     if (selectedUrgency !== "all") {
       filtered = filtered.filter(
         (event) => (event.urgency || "").toLowerCase() === selectedUrgency
       );
     }
 
+    // Filter by date
     const now = new Date();
     switch (selectedDateFilter) {
       case "upcoming":
@@ -99,23 +100,29 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
         break;
       case "today":
         filtered = filtered.filter((event) => {
-          const d = new Date(event.start_time);
-          return d.toDateString() === now.toDateString();
+          const eventDate = new Date(event.start_time);
+          return eventDate.toDateString() === now.toDateString();
         });
         break;
-      case "this_week":
-        const start = new Date(
+      case "this_week": {
+        const startOfWeek = new Date(
           now.getFullYear(),
           now.getMonth(),
           now.getDate() - now.getDay()
         );
-        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+        const endOfWeek = new Date(
+          startOfWeek.getFullYear(),
+          startOfWeek.getMonth(),
+          startOfWeek.getDate() + 7
+        );
         filtered = filtered.filter((event) => {
-          const d = new Date(event.start_time);
-          return d >= start && d < end;
+          const eventDate = new Date(event.start_time);
+          return eventDate >= startOfWeek && eventDate < endOfWeek;
         });
         break;
+      }
       default:
+        // any
         break;
     }
 
@@ -125,6 +132,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   useEffect(() => {
     filterEvents();
     setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, locationTerm, selectedUrgency, selectedDateFilter, allEvents]);
 
   const urgencies = [
@@ -144,8 +152,8 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
   const totalPages = Math.max(1, Math.ceil((filteredEvents?.length || 0) / PAGE_SIZE));
   const startIndex = (page - 1) * PAGE_SIZE;
   const pageItems = (filteredEvents || []).slice(startIndex, startIndex + PAGE_SIZE);
-  const showingFrom = filteredEvents.length ? startIndex + 1 : 0;
-  const showingTo = Math.min(startIndex + PAGE_SIZE, filteredEvents.length);
+  const showingFrom = filteredEvents?.length ? startIndex + 1 : 0;
+  const showingTo = Math.min(startIndex + PAGE_SIZE, filteredEvents?.length || 0);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -159,14 +167,17 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
     <div className="space-y-6">
       {!showDetail && (
         <>
-          {/* Search / Filters */}
+          {/* Main Search Bar */}
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
             <div className="flex flex-col md:flex-row items-center gap-4">
               <div className="flex-1 w-full relative">
                 <label htmlFor="search-events" className="sr-only">
                   Find Events (Name, Skill)
                 </label>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
                 <input
                   type="text"
                   id="search-events"
@@ -176,12 +187,17 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
                   className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
+
               <div className="md:w-px h-10 bg-gray-700 hidden md:block" />
+
               <div className="flex-1 w-full relative">
                 <label htmlFor="search-location" className="sr-only">
                   Location
                 </label>
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <MapPin
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
                 <input
                   type="text"
                   id="search-location"
@@ -191,6 +207,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
                   className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
+
               <button
                 onClick={filterEvents}
                 className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors"
@@ -201,16 +218,18 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
             </div>
           </div>
 
-          {/* Header + Filters */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-white">Browse All Events</h2>
             <div className="flex items-center space-x-4">
               <span className="text-gray-300 text-lg font-medium">
-                Showing {showingFrom} to {showingTo} of {filteredEvents.length} Events
+                Showing {showingFrom} to {showingTo} of {filteredEvents?.length || 0} Events
               </span>
 
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                <Filter
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={16}
+                />
                 <select
                   value={selectedUrgency}
                   onChange={(e) => setSelectedUrgency(e.target.value)}
@@ -227,7 +246,10 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
               </div>
 
               <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                <Calendar
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={16}
+                />
                 <select
                   value={selectedDateFilter}
                   onChange={(e) => setSelectedDateFilter(e.target.value)}
@@ -245,15 +267,17 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
 
           {/* Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pageItems.map((event) => (
-              <div id={`event-card-${event.event_id}`} key={event.event_id}>
-                <EventCard event={event} onClick={handleCardClick} />
-              </div>
+            {(pageItems || []).map((event) => (
+              <EventCard
+                key={event.event_id}
+                event={event}
+                onClick={handleCardClick}
+              />
             ))}
           </div>
 
           {/* Pagination */}
-          {filteredEvents.length > 0 && (
+          {filteredEvents?.length > 0 && (
             <div className="flex items-center justify-center gap-3 mt-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -263,9 +287,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
                 Prev
               </button>
 
-              <span className="text-gray-300">
-                Page {page} of {totalPages}
-              </span>
+              <span className="text-gray-300">Page {page} of {totalPages}</span>
 
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -277,7 +299,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
             </div>
           )}
 
-          {filteredEvents.length === 0 && (
+          {(!filteredEvents || filteredEvents.length === 0) && (
             <div className="text-center py-12">
               <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-white mb-2">No Events Found</h3>
@@ -291,7 +313,7 @@ export function BrowseEvents({ allEvents: initialAllEvents, onEnroll }) {
         <EventDetailView
           event={selectedEvent}
           onBack={handleBackToBrowse}
-          onEnroll={handleEnroll}
+          onEnroll={() => handleEnroll(selectedEvent.event_id)}
           enrolling={enrolling}
         />
       )}

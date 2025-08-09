@@ -6,17 +6,45 @@ import NotificationsPanel from "../components/VolunteerDashboard/NotificationPan
 import { SuggestedEvents } from "../components/VolunteerDashboard/SuggestedEvents";
 import { WelcomeBanner } from "../components/VolunteerDashboard/WelcomeBanner";
 import { LoadingSpinner } from "../components/LoadingSpinner";
-import { User, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { DashboardNavigation } from "../components/VolunteerDashboard/DashboardNavigation";
 import { MyEvents } from "../components/VolunteerDashboard/MyEvents";
+import { VolunteerHistory } from "../components/VolunteerDashboard/History";
 import { BrowseEvents } from "../components/VolunteerDashboard/BrowseEvents";
+
+// Small error boundary to avoid blank screen if History or any child throws
+import React from "react";
+class SafeBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errMsg: "" };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true, errMsg: err?.message || "Something went wrong" };
+  }
+  componentDidCatch(err, info) {
+    // don’t spam: just log once in console
+    // eslint-disable-next-line no-console
+    console.error("VolunteerDashboard child error:", err, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-[#1a2035] border border-gray-700 rounded-lg p-6 text-red-300">
+          <div className="font-semibold text-white mb-1">Oops — something broke.</div>
+          <div className="text-sm">Details: {this.state.errMsg}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /* ──────────────────────────────────────────────────────────────
    BASE URLs
 ────────────────────────────────────────────────────────────── */
-const HARD_API = "https://cosc-4353-backend.vercel.app"; // always works for Leo
-const API_URL = import.meta.env.VITE_API_URL || HARD_API; // others use env
+const HARD_API = "https://cosc-4353-backend.vercel.app"; // keep as team fallback
+const API_URL = import.meta.env.VITE_API_URL || HARD_API;
 
 export default function VolunteerDashboard() {
   /* ───────── local state ───────── */
@@ -26,23 +54,19 @@ export default function VolunteerDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [calendarInfo, setCalendarInfo] = useState([]);
   const [activeSection, setActiveSection] = useState("overview");
+
   const [enrolledEvents, setEnrolledEvents] = useState([]);
   const [browseEvents, setBrowseEvents] = useState([]);
 
-  /* ───────── helpers ───────── */
+  // for redirect from Volunteer Matching → Browse (auto-open event)
+  const [preselectEventId, setPreselectEventId] = useState(null);
 
-  const fetchCalendarEvents = async (userID) => {
-    try {
-      const { data } = await axios.get(
-        `${API_URL}/volunteer-dashboard/calendar/${userID}`
-      );
-      setCalendarInfo(data?.calendarData || []);
-    } catch (error) {
-      console.error(
-        "Error fetching the calendar data in the frontend: ",
-        error
-      );
-    }
+  const userID = localStorage.getItem("userId");
+
+  /* ───────── data fetchers ───────── */
+  const fetchCalendarEvents = async (uid) => {
+    const { data } = await axios.get(`${API_URL}/volunteer-dashboard/calendar/${uid}`);
+    setCalendarInfo(data?.calendarData || []);
   };
 
   const fetchNextEvent = async (uid) => {
@@ -52,20 +76,17 @@ export default function VolunteerDashboard() {
 
   const fetchSuggestedEvents = async (uid) => {
     const { data } = await axios.get(`${API_URL}/api/match/${uid}`);
-    setSuggested(data ?? []);
+    setSuggested(Array.isArray(data) ? data : []);
   };
 
-  // Leo Nguyen - combine general + volunteer-request notifications
+  // combine general + volunteer-request notifications
   const fetchCombinedNotifications = async (uid) => {
     const [{ data: gen }, { data: vr }] = await Promise.all([
-      axios.get(`${HARD_API}/notifications/${uid}`),
-      axios.get(`${HARD_API}/vr-notifications/${uid}`),
+      axios.get(`${HARD_API}/notifications/${uid}`),   // stays on HARD_API
+      axios.get(`${HARD_API}/vr-notifications/${uid}`) // stays on HARD_API
     ]);
 
-    const generic = (gen.notifications || []).map((n) => ({
-      ...n,
-      type: "general",
-    }));
+    const generic = (gen.notifications || []).map((n) => ({ ...n, type: "general" }));
     const requests = (vr || []).map((n) => ({ ...n, type: "request" }));
 
     setNotifications(
@@ -75,46 +96,27 @@ export default function VolunteerDashboard() {
     );
   };
 
-  const fetchEnrolledEvents = async (userID) => {
-    try {
-      const { data } = await axios.get(
-        `${API_URL}/volunteer-dashboard/enrolled-events/${userID}`
-      );
-      setEnrolledEvents(data?.events || []);
-    } catch (error) {}
+  const fetchEnrolledEvents = async (uid) => {
+    const { data } = await axios.get(`${API_URL}/volunteer-dashboard/enrolled-events/${uid}`);
+    setEnrolledEvents(data?.events || []);
   };
 
-  const fetchBrowseEvents = async (userID) => {
-    try {
-      const { data } = await axios.get(
-        `${API_URL}/volunteer-dashboard/browse-events/${userID}`
-      );
-      setBrowseEvents(data?.events || []);
-    } catch (error) {
-      console.error("Error fetching all events for browse events tab: ", error);
-    }
+  const fetchBrowseEvents = async (uid) => {
+    const { data } = await axios.get(`${API_URL}/volunteer-dashboard/browse-events/${uid}`);
+    setBrowseEvents(data?.events || []);
   };
 
-  const onBrowseEnroll = async (userID, eventID) => {
-    try {
-      await axios.post(
-        `${API_URL}/volunteer-dashboard/browse-enroll/${userID}/${eventID}`
-      );
-
-      await Promise.all([
-        fetchEnrolledEvents(userID),
-        fetchBrowseEvents(userID),
-        fetchSuggestedEvents(userID),
-        fetchCalendarEvents(userID),
-      ]);
-    } catch (error) {
-      console.error("Error in onBrowseEnroll ", error);
-    }
+  const onBrowseEnroll = async (uid, eventID) => {
+    await axios.post(`${API_URL}/volunteer-dashboard/browse-enroll/${uid}/${eventID}`);
+    await Promise.all([
+      fetchEnrolledEvents(uid),
+      fetchBrowseEvents(uid),
+      fetchSuggestedEvents(uid),
+      fetchCalendarEvents(uid),
+    ]);
   };
 
-  /* ───────── load on mount ───────── */
-  const userID = localStorage.getItem("userId");
-
+  /* ───────── initial load ───────── */
   const loadData = async () => {
     if (!userID) return;
     try {
@@ -128,9 +130,9 @@ export default function VolunteerDashboard() {
         fetchBrowseEvents(userID),
       ]);
     } catch (err) {
-      console.error("Dashboard load error:", err);
+      console.error("Dashboard load error:", err?.message || err);
     } finally {
-      setTimeout(() => setLoading(false), 500);
+      setTimeout(() => setLoading(false), 400);
     }
   };
 
@@ -138,24 +140,15 @@ export default function VolunteerDashboard() {
     if (userID) loadData();
   }, []);
 
-  /* ───────── NEW: jump from Matching → Browse tab + scroll to event ───────── */
+  // ONE-TIME read for redirect from Volunteer Matching (then clear it)
   useEffect(() => {
-    const jump = localStorage.getItem("vd_jump_all_events");
-    const targetId = localStorage.getItem("vd_scroll_to_event");
-    if (jump) {
-      // switch the tab
+    const selected = sessionStorage.getItem("selectedEventId");
+    if (selected) {
       setActiveSection("all-events");
-      // wait for BrowseEvents list to render, then scroll
-      setTimeout(() => {
-        if (targetId) {
-          const el = document.getElementById(`event-card-${targetId}`);
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-        localStorage.removeItem("vd_jump_all_events");
-        localStorage.removeItem("vd_scroll_to_event");
-      }, 400);
+      setPreselectEventId(selected);
+      sessionStorage.removeItem("selectedEventId");
     }
-  }, [browseEvents]); // runs once the list is present
+  }, []);
 
   /* ───────── render ───────── */
   return (
@@ -176,7 +169,7 @@ export default function VolunteerDashboard() {
           </div>
 
           {/* main column */}
-          {activeSection == "overview" && (
+          {activeSection === "overview" && (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
                 <div className="lg:col-span-2">
@@ -199,14 +192,15 @@ export default function VolunteerDashboard() {
 
                   <CalendarView calendarInfo={calendarInfo} />
                 </div>
+
                 <NotificationsPanel
                   notifications={notifications}
                   refresh={async () => {
                     await Promise.all([
                       fetchCombinedNotifications(userID), // notifications
-                      fetchEnrolledEvents(userID), // My Events
-                      fetchCalendarEvents(userID), // calendar
-                      fetchBrowseEvents(userID), // optional: removes accepted item from Browse
+                      fetchEnrolledEvents(userID),        // My Events
+                      fetchCalendarEvents(userID),        // calendar
+                      fetchBrowseEvents(userID),          // keep list fresh
                     ]);
                   }}
                 />
@@ -221,10 +215,18 @@ export default function VolunteerDashboard() {
           )}
 
           {activeSection === "all-events" && (
-            <BrowseEvents allEvents={browseEvents} onEnroll={onBrowseEnroll} />
+            <BrowseEvents
+              allEvents={browseEvents}
+              onEnroll={onBrowseEnroll}
+              preselectEventId={preselectEventId} // <<< auto-open target event
+            />
           )}
 
-          {activeSection === "history" && <VolunteerHistory />}
+          {activeSection === "history" && (
+            <SafeBoundary>
+              <VolunteerHistory />
+            </SafeBoundary>
+          )}
         </div>
       ) : (
         /* profile-incomplete overlay */
@@ -232,7 +234,8 @@ export default function VolunteerDashboard() {
           <div className="bg-[#1a2035] text-white rounded-xl p-8 max-w-md w-full mx-4 shadow-lg border border-gray-700/50">
             <div className="text-center">
               <div className="mx-auto w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6">
-                <User className="text-indigo-400" size={32} />
+                {/* Icon intentionally removed to reduce import noise */}
+                <span className="font-bold text-indigo-400 text-xl">!</span>
               </div>
 
               <h2 className="text-2xl font-semibold mb-3">
@@ -246,13 +249,9 @@ export default function VolunteerDashboard() {
 
               <button
                 onClick={() => (window.location.href = "/complete-profile")}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center group"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 rounded-lg font-medium transition-colors duration-200"
               >
                 Complete Profile Now
-                <ChevronRight
-                  size={18}
-                  className="ml-2 group-hover:translate-x-1 transition-transform duration-200"
-                />
               </button>
 
               <p className="text-xs text-gray-400 mt-4">

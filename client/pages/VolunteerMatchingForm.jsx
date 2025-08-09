@@ -1,168 +1,129 @@
 // VolunteerMatchingForm.jsx
+// Locked userId (from localStorage) + no notification toggle.
+// Click a match → jumps to dashboard Browse tab and auto-opens that event.
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import { Button } from "../components/ui/Button";
+import { toast } from "react-toastify";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function VolunteerMatchingForm() {
   const navigate = useNavigate();
-  const [volunteerId, setVolunteerId] = useState(
-    localStorage.getItem("userId") || ""
-  );
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [notifLoading, setNotifLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const findMatches = async () => {
-    if (!volunteerId) {
-      setError("Enter a volunteer ID.");
-      return;
+  // Pull locked id from localStorage
+  const userId = localStorage.getItem("userId");
+
+  useEffect(() => {
+    if (!userId) {
+      toast.error("Please log in first.");
+      navigate("/login");
     }
-    setError("");
-    setLoading(true);
+  }, [userId, navigate]);
+
+  const handleFindMatches = async () => {
+    if (!userId) return;
     try {
-      const res = await fetch(`${API_URL}/api/match/${volunteerId}`);
-      if (!res.ok) throw new Error("Server error");
+      setLoading(true);
+      const res = await fetch(`${API_URL}/api/match/${userId}`);
+      if (!res.ok) throw new Error("Failed to fetch matches");
       const data = await res.json();
       setMatches(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
-      setError("Could not load matches. Try again.");
-      setMatches([]);
+      if (!data?.length) {
+        toast("No matches found yet. Try updating your profile skills.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not load matches.");
     } finally {
       setLoading(false);
     }
   };
 
-  const showNotifications = async () => {
-    if (!volunteerId) {
-      setError("Enter a volunteer ID first.");
-      return;
-    }
-    setError("");
-    setNotifLoading(true);
-    try {
-      // nothing to fetch; just route to dashboard where the panel already loads
-      navigate("/volunteer-dashboard");
-    } finally {
-      setNotifLoading(false);
-    }
-  };
-
-  // when user clicks a suggested match card
-  const goToBrowseEvent = (ev) => {
-    // ev.id here is the DB event id returned by /api/match
-    // make dashboard open Browse tab and the exact event detail
-    localStorage.setItem("vd_jump_all_events", "1");        // your dashboard checks this to set activeSection
-    localStorage.setItem("vd_scroll_to_event", String(ev.id));
-    localStorage.setItem("vd_open_detail_event", String(ev.id));
+  const openInDashboard = (eventId) => {
+    // This makes the dashboard Browse tab open the exact event
+    sessionStorage.setItem("selectedEventId", String(eventId));
     navigate("/volunteer-dashboard");
   };
 
   return (
-    <div className="min-h-screen bg-gray-800 text-white pb-24">
+    <div className="min-h-screen bg-gray-800 text-white">
       <Navbar />
 
-      <main className="max-w-5xl mx-auto pt-28 px-4">
-        <h1 className="text-3xl font-bold mb-2">Volunteer Matching</h1>
-        <p className="text-gray-300 mb-8">
-          Find events that fit your location and skills. We’ll also drop a
-          notification when we find your best match.
-        </p>
+      <div className="max-w-4xl mx-auto px-4 pt-28 pb-12">
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold">Volunteer Matching</h1>
+          <p className="text-gray-300 mt-1">
+            We’ll use your profile (location & skills) to find the best events for you.
+          </p>
+        </header>
 
-        {/* Controls */}
+        {/* Locked user info (not editable) */}
         <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 mb-6">
-          <label className="block text-sm text-gray-300 mb-2">Volunteer ID</label>
-          <div className="flex gap-3">
-            <input
-              type="number"
-              min="1"
-              inputMode="numeric"
-              value={volunteerId}
-              onChange={(e) => setVolunteerId(e.target.value.replace(/\D/g, ""))}
-              placeholder="Enter your volunteer ID"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white outline-none focus:ring-2 focus:ring-indigo-600"
-            />
-            <Button
-              onClick={findMatches}
-              disabled={loading}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              {loading ? "Loading..." : "Find Matches"}
-            </Button>
-            <Button
-              onClick={showNotifications}
-              disabled={notifLoading}
-              className="bg-pink-600 hover:bg-pink-700 text-white"
-            >
-             {notifLoading ? "Opening..." : "Show Notifications"}
-            </Button>
-
+          <div className="text-sm text-gray-400">Signed in as</div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-indigo-400 font-semibold">Volunteer ID:</span>
+            <span className="text-white">{userId || "—"}</span>
           </div>
-
-          {error && (
-            <div className="mt-3 text-sm text-red-300 bg-red-900/30 border border-red-700 rounded p-2">
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* Matches */}
-        <section className="mt-6">
-          <h2 className="text-xl font-semibold mb-4">Matches</h2>
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={handleFindMatches}
+            disabled={loading || !userId}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg"
+          >
+            {loading ? "Finding matches..." : "Find Matches"}
+          </button>
 
-          {matches.length === 0 && (
-            <p className="text-gray-400">No matches yet.</p>
-          )}
+          <button
+            onClick={() => navigate("/volunteer-dashboard")}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+          >
+            Back to Dashboard
+          </button>
+        </div>
 
-          <div className="space-y-4">
+        {/* Results */}
+        {matches.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {matches.map((ev) => (
-              <div
-                key={ev.id}
-                className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:border-indigo-600 transition cursor-pointer"
-                onClick={() => goToBrowseEvent(ev)}
+              <button
+                key={ev.id || ev.event_id}
+                onClick={() => openInDashboard(ev.id || ev.event_id)}
+                className="text-left bg-[#1a2035] border border-gray-700 hover:border-indigo-600 rounded-xl p-4 transition-colors"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">{ev.title}</h3>
-                    <p className="text-gray-300 text-sm">
-                      {new Date(ev.startTime).toLocaleString()} –{" "}
-                      {new Date(ev.endTime).toLocaleTimeString()}
-                    </p>
-                    {ev.location && (
-                      <p className="text-gray-400 text-sm">{ev.location}</p>
-                    )}
-                  </div>
-                  <div className="text-sm text-indigo-300">
-                    score: <span className="font-semibold">{ev.matchScore}</span>
-                  </div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-lg font-semibold">
+                    {ev.title || ev.event_name || "Event"}
+                  </h3>
+                  <span className="text-xs bg-indigo-700/40 text-indigo-200 px-2 py-0.5 rounded">
+                    Score: {ev.matchScore ?? "—"}
+                  </span>
                 </div>
-
-                {ev.matchedSkills?.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400">Matched skills:</span>
-                    {ev.matchedSkills.map((s) => (
-                      <span
-                        key={s}
-                        className="text-xs bg-indigo-700/30 border border-indigo-600 px-2 py-0.5 rounded text-indigo-200"
-                      >
-                        {s}
-                      </span>
-                    ))}
+                <div className="text-gray-300 text-sm">
+                  {new Date(ev.startTime || ev.start_time).toLocaleString()}
+                </div>
+                <div className="text-gray-400 text-sm mt-2">
+                  {ev.location || ev.event_location}
+                </div>
+                {!!ev.matchedSkills?.length && (
+                  <div className="mt-2 text-xs text-gray-300">
+                    Matched skills: {ev.matchedSkills.join(", ")}
                   </div>
                 )}
-
-                {ev.description && (
-                  <p className="mt-3 text-sm text-gray-300">{ev.description}</p>
-                )}
-              </div>
+              </button>
             ))}
           </div>
-        </section>
-      </main>
+        ) : (
+          <div className="text-gray-400">
+            {loading ? "Fetching..." : "No matches yet. Click 'Find Matches' to start."}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
